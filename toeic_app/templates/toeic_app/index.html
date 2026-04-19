@@ -150,16 +150,17 @@
   .level-chip.高級 { background: var(--green-dim);  color: var(--green);  border: 1px solid var(--green); }
 
   .quiz-sentence {
-    font-size: 18px; font-weight: 600; line-height: 1.7;
+    font-size: 18px; font-weight: 600; line-height: 1.9;
     color: var(--text); text-align: center;
-    min-height: 52px; display: flex; align-items: center; justify-content: center;
+    min-height: 52px;
   }
-  /* ★ 底線改虛線 */
+  /* ★ 底線改虛線，空白 span 撐寬，不放文字避免換行斷裂 */
   .quiz-sentence .blank {
     display: inline-block;
     border-bottom: 2px dashed var(--blue);
-    color: var(--blue);
-    min-width: 80px; text-align: center; padding: 0 4px;
+    width: 90px;
+    vertical-align: bottom;
+    margin: 0 4px;
   }
 
   .dot-row { display: flex; gap: 6px; justify-content: center; }
@@ -556,7 +557,7 @@ async function nextQuiz() {
 
 function renderSentence(sentence) {
   document.getElementById('quizSentence').innerHTML =
-    sentence.replace(/______/g, '<span class="blank">______</span>');
+    sentence.replace(/\s*______\s*/g, ' <span class="blank"></span> ');
 }
 
 function buildOptions(q) {
