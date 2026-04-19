@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TOEIC 單字練習</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=DM+Mono:wght@500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:         #f5f0e4;
+    --surface:    #faf7f0;
+    --surface2:   #ede8db;
+    --border:     #d8d0bc;
+    --text:       #2c2416;
+    --muted:      #8a7d6a;
+    --blue:       #2563b0;
+    --blue-dim:   #dceafb;
+    --green:      #1a7a4a;
+    --green-dim:  #d4f0e2;
+    --red:        #c0392b;
+    --red-dim:    #fde8e6;
+    --orange:     #c05a10;
+    --orange-dim: #fdebd8;
+    --purple:     #6d3db5;
+    --purple-dim: #ece5f8;
+    --radius:     14px;
+    --radius-sm:  9px;
+    --shadow:     0 2px 12px rgba(0,0,0,0.08);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 16px 48px;
+  }
+
+  .app { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 11px; }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .header-top {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 13px;
+  }
+  .app-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--blue);
+    letter-spacing: .01em;
+  }
+  .streak-badge {
+    background: var(--orange-dim);
+    border: 1px solid var(--orange);
+    color: var(--orange);
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    display: none;
+  }
+  .streak-badge.show { display: block; }
+
+  .progress-rows { display: flex; flex-direction: column; gap: 6px; }
+  .progress-row  { display: flex; align-items: center; gap: 8px; }
+  .prog-label    { font-size: 11px; font-weight: 700; width: 28px; }
+  .prog-label.shochuu { color: var(--purple); }
+  .prog-label.chuchuu { color: var(--blue); }
+  .prog-label.kaochuu { color: var(--green); }
+  .prog-track {
+    flex: 1; height: 6px; background: var(--surface2);
+    border-radius: 3px; overflow: hidden;
+  }
+  .prog-fill { height: 100%; border-radius: 3px; transition: width .5s cubic-bezier(.4,0,.2,1); width: 0%; }
+  .prog-fill.shochuu { background: var(--purple); }
+  .prog-fill.chuchuu { background: var(--blue); }
+  .prog-fill.kaochuu { background: var(--green); }
+  .prog-count { font-size: 11px; color: var(--muted); width: 52px; text-align: right; font-family: 'DM Mono', monospace; }
+
+  /* ── 卡片 ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 9px; font-weight: 600; }
+
+  .btn-group { display: flex; gap: 7px; }
+  .seg-btn {
+    flex: 1; padding: 9px 4px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 13px; font-weight: 600;
+    font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; transition: all .16s;
+    text-align: center;
+  }
+  .seg-btn:active { transform: scale(.96); }
+  .seg-btn.active-blue   { border-color: var(--blue);   background: var(--blue-dim);   color: var(--blue); }
+  .seg-btn.active-purple { border-color: var(--purple); background: var(--purple-dim); color: var(--purple); }
+  .seg-btn.active-green  { border-color: var(--green);  background: var(--green-dim);  color: var(--green); }
+  .seg-btn.active-orange { border-color: var(--orange); background: var(--orange-dim); color: var(--orange); }
+
+  .divider { height: 1px; background: var(--border); margin: 11px 0; }
+
+  .reset-row { display: flex; align-items: center; justify-content: space-between; }
+  .reset-hint { font-size: 11px; color: var(--muted); }
+  .reset-btn {
+    font-size: 11px; color: var(--red); font-weight: 600;
+    background: var(--red-dim); border: 1px solid var(--red);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-family: 'Noto Sans TC', sans-serif; transition: opacity .15s;
+  }
+  .reset-btn:active { opacity: .7; }
+
+  /* ── 題目卡片 ── */
+  .quiz-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 18px 16px;
+    min-height: 130px;
+    display: flex; flex-direction: column; gap: 11px;
+    box-shadow: var(--shadow);
+  }
+  .quiz-meta { display: flex; align-items: center; justify-content: space-between; }
+  .quiz-instruction { font-size: 11px; color: var(--muted); }
+  .level-chip {
+    font-size: 11px; font-weight: 700; padding: 3px 9px;
+    border-radius: 20px; font-family: 'DM Mono', monospace;
+  }
+  .level-chip.初級 { background: var(--purple-dim); color: var(--purple); border: 1px solid var(--purple); }
+  .level-chip.中級 { background: var(--blue-dim);   color: var(--blue);   border: 1px solid var(--blue); }
+  .level-chip.高級 { background: var(--green-dim);  color: var(--green);  border: 1px solid var(--green); }
+
+  .quiz-sentence {
+    font-size: 18px; font-weight: 600; line-height: 1.7;
+    color: var(--text); text-align: center;
+    min-height: 52px; display: flex; align-items: center; justify-content: center;
+  }
+  /* ★ 底線改虛線 */
+  .quiz-sentence .blank {
+    display: inline-block;
+    border-bottom: 2px dashed var(--blue);
+    color: var(--blue);
+    min-width: 80px; text-align: center; padding: 0 4px;
+  }
+
+  .dot-row { display: flex; gap: 6px; justify-content: center; }
+  .dot { width: 8px; height: 8px; border-radius: 4px; background: var(--surface2); transition: background .3s; }
+  .dot.filled { background: var(--green); }
+
+  /* TTS */
+  .tts-area { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .tts-btn {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 16px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--blue); background: var(--blue-dim);
+    color: var(--blue); font-size: 13px; font-weight: 700;
+    font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; transition: all .15s;
+  }
+  .tts-btn:active { transform: scale(.96); }
+  .tts-btn.orange { border-color: var(--orange); background: var(--orange-dim); color: var(--orange); }
+  .tts-btn.muted  { border-color: var(--border); background: var(--surface2);  color: var(--muted); }
+  .tts-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .listen-big-btn {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    width: 100%; padding: 16px;
+    border-radius: var(--radius);
+    border: 2px solid var(--orange); background: var(--orange-dim);
+    color: var(--orange); font-size: 16px; font-weight: 700;
+    font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; transition: all .15s;
+  }
+  .listen-big-btn svg { width: 26px; height: 26px; }
+  .listen-big-btn:active { transform: scale(.97); }
+
+  /* ── 選項 ── */
+  .options { display: flex; flex-direction: column; gap: 7px; }
+  .option-btn {
+    display: flex; align-items: center; gap: 11px;
+    padding: 13px 13px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    cursor: pointer; transition: all .15s;
+    text-align: left; width: 100%;
+    box-shadow: var(--shadow);
+  }
+  .option-btn:active { transform: scale(.98); }
+  .option-btn.selected { border-color: var(--blue);  background: var(--blue-dim); }
+  .option-btn.correct  { border-color: var(--green); background: var(--green-dim); }
+  .option-btn.wrong    { border-color: var(--red);   background: var(--red-dim); }
+
+  .opt-label {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    flex-shrink: 0; transition: all .15s;
+    font-family: 'DM Mono', monospace;
+  }
+  .option-btn.selected .opt-label { background: var(--blue-dim);   border-color: var(--blue);  color: var(--blue); }
+  .option-btn.correct  .opt-label { background: var(--green-dim);  border-color: var(--green); color: var(--green); }
+  .option-btn.wrong    .opt-label { background: var(--red-dim);    border-color: var(--red);   color: var(--red); }
+  .opt-word { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
+
+  /* ── 填充 ── */
+  .fill-area { display: flex; flex-direction: column; gap: 8px; }
+  .hint-text { font-size: 13px; color: var(--blue); font-style: italic; text-align: center; font-family: 'DM Mono', monospace; }
+  .fill-input {
+    width: 100%; padding: 13px 15px;
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: 16px; font-family: 'Noto Sans TC', sans-serif;
+    outline: none; transition: border-color .2s;
+    box-shadow: var(--shadow);
+  }
+  .fill-input:focus { border-color: var(--blue); }
+
+  /* ── 結果卡片 ── */
+  .result-card {
+    border-radius: var(--radius); padding: 16px;
+    display: none; flex-direction: column; gap: 9px;
+    box-shadow: var(--shadow);
+  }
+  .result-card.correct-bg { background: var(--green-dim); border: 1.5px solid var(--green); }
+  .result-card.wrong-bg   { background: var(--red-dim);   border: 1.5px solid var(--red); }
+  .result-title { font-size: 15px; font-weight: 700; }
+  .result-title.correct-text { color: var(--green); }
+  .result-title.wrong-text   { color: var(--red); }
+  .result-section-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .opt-analysis { display: flex; flex-direction: column; gap: 4px; }
+  .opt-row { font-size: 13px; color: var(--muted); }
+  .opt-row.is-correct { color: var(--green); font-weight: 600; }
+  .trans-text { font-size: 13px; color: var(--text); line-height: 1.6; }
+  .result-divider { height: 1px; background: var(--border); }
+
+  /* ── 主按鈕 ── */
+  .main-btn-area { display: flex; justify-content: center; }
+  .main-btn {
+    width: 100%; padding: 17px;
+    border-radius: var(--radius); border: none;
+    font-size: 16px; font-weight: 700;
+    font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; transition: all .15s;
+    letter-spacing: .03em; box-shadow: var(--shadow);
+  }
+  .main-btn:active { transform: scale(.97); }
+  .main-btn.blue  { background: var(--blue);  color: #fff; }
+  .main-btn.green { background: var(--green); color: #fff; }
+  .main-btn.hidden { display: none; }
+
+  /* loading */
+  .loading-overlay {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 99; transition: opacity .3s;
+  }
+  .loading-overlay.hide { opacity: 0; pointer-events: none; }
+  .loading-spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .fade-up { animation: fadeUp .22s ease forwards; }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+</div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <span class="app-title">TOEIC Vocab</span>
+      <span class="streak-badge" id="streakBadge">🔥 <span id="streakNum">0</span></span>
+    </div>
+    <div class="progress-rows">
+      <div class="progress-row">
+        <span class="prog-label shochuu">初級</span>
+        <div class="prog-track"><div class="prog-fill shochuu" id="prog初級"></div></div>
+        <span class="prog-count" id="cnt初級">0 / 0</span>
+      </div>
+      <div class="progress-row">
+        <span class="prog-label chuchuu">中級</span>
+        <div class="prog-track"><div class="prog-fill chuchuu" id="prog中級"></div></div>
+        <span class="prog-count" id="cnt中級">0 / 0</span>
+      </div>
+      <div class="progress-row">
+        <span class="prog-label kaochuu">高級</span>
+        <div class="prog-track"><div class="prog-fill kaochuu" id="prog高級"></div></div>
+        <span class="prog-count" id="cnt高級">0 / 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定卡片 -->
+  <div class="card">
+    <div class="card-label">難度目標</div>
+    <div class="btn-group" id="levelBtns">
+      <button class="seg-btn" data-level="初級" onclick="setLevel('初級')">初級</button>
+      <button class="seg-btn active-blue" data-level="中級" onclick="setLevel('中級')">中級</button>
+      <button class="seg-btn" data-level="高級" onclick="setLevel('高級')">高級</button>
+    </div>
+    <div class="divider"></div>
+    <div class="card-label">題目模式</div>
+    <div class="btn-group" id="modeBtns">
+      <button class="seg-btn active-blue" data-mode="choice" onclick="setMode('choice')">選擇題</button>
+      <button class="seg-btn" data-mode="fill" onclick="setMode('fill')">填充題</button>
+      <button class="seg-btn" data-mode="listen" onclick="setMode('listen')">🎧 聽力</button>
+    </div>
+    <div class="divider"></div>
+    <div class="reset-row">
+      <span class="reset-hint">進度儲存於此裝置瀏覽器</span>
+      <button class="reset-btn" onclick="resetProgress()">重置進度</button>
+    </div>
+  </div>
+
+  <!-- 題目卡片 -->
+  <div class="quiz-card" id="quizCard">
+    <div class="quiz-meta">
+      <span class="quiz-instruction" id="quizInstruction">選出正確的單字</span>
+      <span class="level-chip 中級" id="levelChip">中級</span>
+    </div>
+    <div class="quiz-sentence" id="quizSentence">點擊下方按鈕開始練習</div>
+    <div class="dot-row" id="dotRow"></div>
+  </div>
+
+  <!-- TTS -->
+  <div class="tts-area" id="ttsArea" style="display:none"></div>
+
+  <!-- 選項 -->
+  <div class="options" id="optionsArea"></div>
+
+  <!-- 填充 -->
+  <div class="fill-area" id="fillArea" style="display:none">
+    <div class="hint-text" id="hintText"></div>
+    <input class="fill-input" id="fillInput" type="text" placeholder="輸入單字…"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>
+
+  <!-- 結果 -->
+  <div class="result-card" id="resultCard">
+    <div class="result-title" id="resultTitle"></div>
+    <div class="tts-area" id="resultTtsArea"></div>
+    <div class="result-section-label">選項解析</div>
+    <div class="opt-analysis" id="optAnalysis"></div>
+    <div class="result-divider"></div>
+    <div class="result-section-label">📖 句子翻譯</div>
+    <div class="trans-text" id="transText"></div>
+  </div>
+
+  <!-- 主按鈕 -->
+  <div class="main-btn-area">
+    <button class="main-btn blue"         id="btnStart" onclick="nextQuiz()">START !</button>
+    <button class="main-btn green hidden" id="btnCheck" onclick="checkAns()">驗證答案 ✓</button>
+    <button class="main-btn blue  hidden" id="btnNext"  onclick="nextQuiz()">下一題 →</button>
+  </div>
+
+</div>
+
+<script>
+const LS_KEY   = 'toeic_progress_v2';
+const MASTERED = 3;
+const STATS       = {{ stats|safe }};
+const LEVEL_WORDS = {{ level_words|safe }};
+const HISTORY_LEN = 5; // 記住最近幾題避免重複
+
+let state = {
+  level:         '中級',
+  mode:          'choice',
+  currentQ:      null,
+  selectedWord:  null,
+  correctCounts: {},
+  lastWords:     [],   // 最近 HISTORY_LEN 題
+  streak:        0,
+};
+
+// ── localStorage ────────────────────────────────────
+function loadProgress() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    state.correctCounts = d.counts    || {};
+    state.lastWords     = d.lastWords || [];
+    state.streak        = d.streak    || 0;
+  } catch(e) {}
+}
+function saveProgress() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      counts:    state.correctCounts,
+      lastWords: state.lastWords,
+      streak:    state.streak,
+    }));
+  } catch(e) {}
+}
+function resetProgress() {
+  if (!confirm('確定要重置所有學習進度嗎？')) return;
+  state.correctCounts = {};
+  state.lastWords = [];
+  state.streak = 0;
+  saveProgress();
+  updateProgressBars();
+  updateStreak();
+}
+
+// ── 進度條（分等級正確計算）────────────────────────────
+function updateProgressBars() {
+  ['初級','中級','高級'].forEach(lv => {
+    const words   = LEVEL_WORDS[lv] || [];
+    const total   = words.length;
+    const mastered = words.filter(w => (state.correctCounts[w] || 0) >= MASTERED).length;
+    const pct = total ? Math.round(mastered / total * 100) : 0;
+    document.getElementById('prog' + lv).style.width = pct + '%';
+    document.getElementById('cnt'  + lv).textContent = `${mastered} / ${total}`;
+  });
+}
+
+function updateStreak() {
+  document.getElementById('streakNum').textContent = state.streak;
+  document.getElementById('streakBadge').classList.toggle('show', state.streak >= 3);
+}
+
+// ── 難度 / 模式 ──────────────────────────────────────
+function setLevel(lv) {
+  state.level = lv;
+  const map = { '初級':'active-purple', '中級':'active-blue', '高級':'active-green' };
+  document.querySelectorAll('#levelBtns .seg-btn').forEach(b => {
+    b.className = 'seg-btn' + (b.dataset.level === lv ? ' ' + map[lv] : '');
+  });
+  if (state.currentQ) nextQuiz();
+}
+function setMode(m) {
+  state.mode = m;
+  const map = { 'choice':'active-blue', 'fill':'active-blue', 'listen':'active-orange' };
+  document.querySelectorAll('#modeBtns .seg-btn').forEach(b => {
+    b.className = 'seg-btn' + (b.dataset.mode === m ? ' ' + map[m] : '');
+  });
+  if (state.currentQ) nextQuiz();
+}
+
+// ── TTS ─────────────────────────────────────────────
+function tts(word) {
+  const w = word.split('/')[0].trim();
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(w);
+  u.lang = 'en-US'; u.rate = 0.9;
+  speechSynthesis.speak(u);
+}
+function makeTtsBtn(label, word, cls='') {
+  const btn = document.createElement('button');
+  btn.className = `tts-btn ${cls}`;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>${label}`;
+  btn.onclick = () => tts(word);
+  return btn;
+}
+
+// ── 取題 ─────────────────────────────────────────────
+async function nextQuiz() {
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('ttsArea').style.display    = 'none';
+  document.getElementById('fillArea').style.display   = 'none';
+  document.getElementById('optionsArea').innerHTML    = '';
+  document.getElementById('ttsArea').innerHTML        = '';
+  state.selectedWord = null;
+  document.getElementById('quizSentence').textContent = '載入中…';
+  document.getElementById('dotRow').innerHTML = '';
+
+  const params = new URLSearchParams({
+    difficulty:  state.level,
+    last_words:  JSON.stringify(state.lastWords),
+    counts:      JSON.stringify(state.correctCounts),
+  });
+  let q;
+  try {
+    const res = await fetch(`/api/question/?${params}`);
+    q = await res.json();
+  } catch(e) {
+    document.getElementById('quizSentence').textContent = '⚠️ 載入失敗，請重試';
+    return;
+  }
+  state.currentQ = q;
+
+  const chip = document.getElementById('levelChip');
+  chip.textContent = q.level;
+  chip.className = `level-chip ${q.level}`;
+  updateDotRow(q.word);
+
+  const mode = state.mode;
+  if (mode === 'listen') {
+    document.getElementById('quizInstruction').textContent = '🎧 聽發音，選出正確單字';
+    document.getElementById('quizSentence').textContent    = '點擊下方按鈕播放發音';
+    const bigBtn = document.createElement('button');
+    bigBtn.className = 'listen-big-btn';
+    bigBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>播放單字發音`;
+    bigBtn.onclick = () => tts(q.word);
+    document.getElementById('ttsArea').appendChild(bigBtn);
+    document.getElementById('ttsArea').style.display = 'flex';
+    buildOptions(q);
+    tts(q.word);
+
+  } else if (mode === 'choice') {
+    document.getElementById('quizInstruction').textContent = '選出正確的單字';
+    renderSentence(q.sentence);
+    buildOptions(q);
+
+  } else {
+    document.getElementById('quizInstruction').textContent = '填入正確的單字';
+    renderSentence(q.sentence);
+    const ta = document.getElementById('ttsArea');
+    ta.appendChild(makeTtsBtn('聽發音', q.word));
+    ta.style.display = 'flex';
+    const w = q.word.split('/')[0];
+    document.getElementById('hintText').textContent =
+      w.length > 2 ? `提示：${w[0]} ${'_ '.repeat(w.length-2)}${w[w.length-1]}` : `提示：${w[0]}…`;
+    document.getElementById('fillInput').value = '';
+    document.getElementById('fillArea').style.display = 'flex';
+    setTimeout(() => document.getElementById('fillInput').focus(), 100);
+  }
+
+  showBtn('check');
+  document.getElementById('quizCard').classList.add('fade-up');
+  setTimeout(() => document.getElementById('quizCard').classList.remove('fade-up'), 250);
+}
+
+function renderSentence(sentence) {
+  document.getElementById('quizSentence').innerHTML =
+    sentence.replace(/______/g, '<span class="blank">______</span>');
+}
+
+function buildOptions(q) {
+  const area = document.getElementById('optionsArea');
+  area.innerHTML = '';
+  ['A','B','C','D'].forEach((lbl, i) => {
+    if (!q.options[i]) return;
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.dataset.word = q.options[i].word;
+    btn.innerHTML = `<span class="opt-label">${lbl}</span><span class="opt-word">${q.options[i].word}</span>`;
+    btn.onclick = () => selectOption(q.options[i].word);
+    area.appendChild(btn);
+  });
+}
+
+function selectOption(word) {
+  state.selectedWord = word;
+  document.querySelectorAll('.option-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.word === word);
+  });
+}
+
+function updateDotRow(word) {
+  const count = state.correctCounts[word] || 0;
+  const row = document.getElementById('dotRow');
+  row.innerHTML = '';
+  for (let i = 0; i < MASTERED; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i < count ? ' filled' : '');
+    row.appendChild(d);
+  }
+}
+
+// ── 驗證 ─────────────────────────────────────────────
+function checkAns() {
+  const q = state.currentQ;
+  if (!q) return;
+  const userVal = (state.mode === 'fill'
+    ? document.getElementById('fillInput').value.trim()
+    : state.selectedWord || '').trim();
+  if (!userVal) return;
+
+  const correctList = q.word.split('/').map(w => w.trim().toLowerCase());
+  correctList.push(q.word.trim().toLowerCase());
+  const isCorrect = correctList.includes(userVal.toLowerCase());
+
+  document.querySelectorAll('.option-btn').forEach(b => {
+    if (b.dataset.word === q.word)              b.classList.add('correct');
+    else if (b.dataset.word === userVal && !isCorrect) b.classList.add('wrong');
+  });
+
+  const card  = document.getElementById('resultCard');
+  const title = document.getElementById('resultTitle');
+  card.style.display = 'flex';
+  card.className = `result-card ${isCorrect ? 'correct-bg' : 'wrong-bg'} fade-up`;
+  title.className = `result-title ${isCorrect ? 'correct-text' : 'wrong-text'}`;
+
+  if (isCorrect) {
+    title.textContent = `✅ 正確！  ${q.word}　${q.translation}`;
+    const prev = state.correctCounts[q.word] || 0;
+    if (prev < MASTERED) state.correctCounts[q.word] = prev + 1;
+    state.streak++;
+  } else {
+    title.textContent = `❌ 正確答案：${q.word}　${q.translation}`;
+    state.streak = 0;
+  }
+
+  const rtts = document.getElementById('resultTtsArea');
+  rtts.innerHTML = '';
+  rtts.appendChild(makeTtsBtn('再聽一次', q.word.split('/')[0], 'muted'));
+
+  document.getElementById('optAnalysis').innerHTML = q.options.map(o =>
+    `<div class="opt-row ${o.word===q.word?'is-correct':''}">
+      ${o.word===q.word?'✅':'⚪'} ${o.word}　${o.trans}
+    </div>`
+  ).join('');
+  document.getElementById('transText').textContent = q.trans_s;
+
+  if (state.mode === 'choice') {
+    const ta = document.getElementById('ttsArea');
+    ta.innerHTML = '';
+    ta.appendChild(makeTtsBtn('聽發音', q.word.split('/')[0]));
+    ta.style.display = 'flex';
+  }
+
+  // 更新歷史（最多記 HISTORY_LEN 筆）
+  state.lastWords.push(q.word);
+  if (state.lastWords.length > HISTORY_LEN) state.lastWords.shift();
+
+  state.lastWord = q.word;
+  updateProgressBars();
+  updateStreak();
+  saveProgress();
+  updateDotRow(q.word);
+  showBtn('next');
+  setTimeout(() => card.classList.remove('fade-up'), 250);
+}
+
+function showBtn(which) {
+  document.getElementById('btnStart').classList.add('hidden');
+  document.getElementById('btnCheck').classList.add('hidden');
+  document.getElementById('btnNext').classList.add('hidden');
+  document.getElementById('btn' + which.charAt(0).toUpperCase() + which.slice(1)).classList.remove('hidden');
+}
+
+// ── 初始化 ───────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadProgress();
+  updateProgressBars();
+  updateStreak();
+  setTimeout(() => document.getElementById('loadingOverlay').classList.add('hide'), 300);
+  document.getElementById('fillInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') checkAns();
+  });
+});
+</script>
+</body>
+</html>
