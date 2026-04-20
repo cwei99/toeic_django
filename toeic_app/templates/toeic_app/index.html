@@ -73,6 +73,16 @@
   }
   .streak-badge.show { display: block; }
 
+  .vocab-list-btn {
+    background: var(--blue-dim);
+    border: 1px solid var(--blue);
+    color: var(--blue);
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px;
+    cursor: pointer;
+  }
+  .vocab-list-btn:hover { background: var(--blue); color: #fff; }
+
   .progress-rows { display: flex; flex-direction: column; gap: 6px; }
   .progress-row  { display: flex; align-items: center; gap: 8px; }
   .prog-label    { font-size: 11px; font-weight: 700; width: 28px; }
@@ -87,7 +97,7 @@
   .prog-fill.shochuu { background: var(--purple); }
   .prog-fill.chuchuu { background: var(--blue); }
   .prog-fill.kaochuu { background: var(--green); }
-  .prog-count { font-size: 11px; color: var(--muted); width: 52px; text-align: right; font-family: 'DM Mono', monospace; }
+  .prog-count { font-size: 11px; color: var(--muted); min-width: 72px; text-align: right; font-family: 'DM Mono', monospace; white-space: nowrap; }
 
   /* ── 卡片 ── */
   .card {
@@ -304,7 +314,10 @@
   <div class="header">
     <div class="header-top">
       <span class="app-title">TOEIC Vocab</span>
-      <span class="streak-badge" id="streakBadge">🔥 <span id="streakNum">0</span></span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="vocab-list-btn" onclick="openVocabModal()">📖 單字表</button>
+        <span class="streak-badge" id="streakBadge">🔥 <span id="streakNum">0</span></span>
+      </div>
     </div>
     <div class="progress-rows">
       <div class="progress-row">
@@ -390,12 +403,43 @@
 
 </div>
 
+<!-- 單字表 Modal -->
+<div id="vocabModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;overflow-y:auto;padding:16px;">
+  <div style="background:var(--surface);border-radius:var(--radius);max-width:480px;margin:0 auto;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:16px;font-weight:700;">📖 單字表</span>
+      <button onclick="closeVocabModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <!-- 搜尋 + 篩選 -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <input id="vocabSearch" type="text" placeholder="搜尋單字…" oninput="renderVocabList()"
+        style="flex:1;min-width:120px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:14px;color:var(--text);">
+      <select id="vocabLevelFilter" onchange="renderVocabList()"
+        style="padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:13px;color:var(--text);">
+        <option value="">全部</option>
+        <option value="初級">初級</option>
+        <option value="中級">中級</option>
+        <option value="高級">高級</option>
+      </select>
+      <select id="vocabStatusFilter" onchange="renderVocabList()"
+        style="padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:13px;color:var(--text);">
+        <option value="">全部狀態</option>
+        <option value="mastered">已精熟</option>
+        <option value="learning">學習中</option>
+        <option value="new">未學習</option>
+      </select>
+    </div>
+    <div id="vocabListBody" style="overflow-y:auto;max-height:65vh;display:block;"></div>
+    <div id="vocabListCount" style="margin-top:10px;font-size:12px;color:var(--muted);text-align:right;"></div>
+  </div>
+</div>
+
 <script>
 const LS_KEY   = 'toeic_progress_v2';
 const MASTERED = 3;
 const STATS       = {{ stats|safe }};
 const LEVEL_WORDS = {{ level_words|safe }};
-const HISTORY_LEN = 5; // 記住最近幾題避免重複
+const HISTORY_LEN = 25; // 記住最近幾題（精熟題需間隔 20 題）
 
 let state = {
   level:         '中級',
@@ -403,7 +447,7 @@ let state = {
   currentQ:      null,
   selectedWord:  null,
   correctCounts: {},
-  lastWords:     [],   // 最近 HISTORY_LEN 題
+  history:       [],   // 最近 HISTORY_LEN 題（新到舊）
   streak:        0,
 };
 
@@ -411,24 +455,24 @@ let state = {
 function loadProgress() {
   try {
     const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-    state.correctCounts = d.counts    || {};
-    state.lastWords     = d.lastWords || [];
-    state.streak        = d.streak    || 0;
+    state.correctCounts = d.counts  || {};
+    state.history       = d.history || [];
+    state.streak        = d.streak  || 0;
   } catch(e) {}
 }
 function saveProgress() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
-      counts:    state.correctCounts,
-      lastWords: state.lastWords,
-      streak:    state.streak,
+      counts:  state.correctCounts,
+      history: state.history,
+      streak:  state.streak,
     }));
   } catch(e) {}
 }
 function resetProgress() {
   if (!confirm('確定要重置所有學習進度嗎？')) return;
   state.correctCounts = {};
-  state.lastWords = [];
+  state.history = [];
   state.streak = 0;
   saveProgress();
   updateProgressBars();
@@ -499,9 +543,9 @@ async function nextQuiz() {
   document.getElementById('dotRow').innerHTML = '';
 
   const params = new URLSearchParams({
-    difficulty:  state.level,
-    last_words:  JSON.stringify(state.lastWords),
-    counts:      JSON.stringify(state.correctCounts),
+    difficulty: state.level,
+    history:    JSON.stringify(state.history),
+    counts:     JSON.stringify(state.correctCounts),
   });
   let q;
   try {
@@ -601,12 +645,15 @@ function checkAns() {
     : state.selectedWord || '').trim();
   if (!userVal) return;
 
-  const correctList = q.word.split('/').map(w => w.trim().toLowerCase());
-  correctList.push(q.word.trim().toLowerCase());
+  // 正確答案：優先用 answer_display（時態變化後），fallback 原形
+  const answerDisplay = q.answer_display || q.word;
+  const correctList = [answerDisplay.toLowerCase()];
+  // 也接受原形（填充題容錯）
+  q.word.split('/').forEach(w => correctList.push(w.trim().toLowerCase()));
   const isCorrect = correctList.includes(userVal.toLowerCase());
 
   document.querySelectorAll('.option-btn').forEach(b => {
-    if (b.dataset.word === q.word)              b.classList.add('correct');
+    if (b.dataset.word === answerDisplay)              b.classList.add('correct');
     else if (b.dataset.word === userVal && !isCorrect) b.classList.add('wrong');
   });
 
@@ -617,12 +664,14 @@ function checkAns() {
   title.className = `result-title ${isCorrect ? 'correct-text' : 'wrong-text'}`;
 
   if (isCorrect) {
-    title.textContent = `✅ 正確！  ${q.word}　${q.translation}`;
+    const hint = (q.word !== answerDisplay) ? `（${q.word}）` : '';
+    title.textContent = `✅ 正確！  ${answerDisplay}${hint}　${q.translation}`;
     const prev = state.correctCounts[q.word] || 0;
     if (prev < MASTERED) state.correctCounts[q.word] = prev + 1;
     state.streak++;
   } else {
-    title.textContent = `❌ 正確答案：${q.word}　${q.translation}`;
+    const hint = (q.word !== answerDisplay) ? `（${q.word}）` : '';
+    title.textContent = `❌ 正確答案：${answerDisplay}${hint}　${q.translation}`;
     state.streak = 0;
   }
 
@@ -630,11 +679,14 @@ function checkAns() {
   rtts.innerHTML = '';
   rtts.appendChild(makeTtsBtn('再聽一次', q.word.split('/')[0], 'muted'));
 
-  document.getElementById('optAnalysis').innerHTML = q.options.map(o =>
-    `<div class="opt-row ${o.word===q.word?'is-correct':''}">
-      ${o.word===q.word?'✅':'⚪'} ${o.word}　${o.trans}
-    </div>`
-  ).join('');
+  document.getElementById('optAnalysis').innerHTML = q.options.map(o => {
+    const baseHint = (o.base_word && o.base_word !== o.word)
+      ? `<span style="color:#888;font-size:13px;">（${o.base_word}）</span>　`
+      : '';
+    return `<div class="opt-row ${o.word === answerDisplay ? 'is-correct' : ''}">
+      ${o.word === answerDisplay ? '✅' : '⚪'} ${o.word}　${baseHint}${o.trans}
+    </div>`;
+  }).join('');
   document.getElementById('transText').textContent = q.trans_s;
 
   if (state.mode === 'choice') {
@@ -644,9 +696,9 @@ function checkAns() {
     ta.style.display = 'flex';
   }
 
-  // 更新歷史（最多記 HISTORY_LEN 筆）
-  state.lastWords.push(q.word);
-  if (state.lastWords.length > HISTORY_LEN) state.lastWords.shift();
+  // 更新歷史（最新在前，最多記 HISTORY_LEN 筆）
+  state.history.unshift(q.word);
+  if (state.history.length > HISTORY_LEN) state.history.pop();
 
   state.lastWord = q.word;
   updateProgressBars();
@@ -662,6 +714,143 @@ function showBtn(which) {
   document.getElementById('btnCheck').classList.add('hidden');
   document.getElementById('btnNext').classList.add('hidden');
   document.getElementById('btn' + which.charAt(0).toUpperCase() + which.slice(1)).classList.remove('hidden');
+}
+
+// ── 單字表 ────────────────────────────────────────────
+const WORD_DATA_FULL = ({{ word_data|safe }}).map(item => {
+  const fixed = {};
+  for (const k in item) { fixed[k.replace(/^\ufeff/, '')] = item[k]; }
+  return fixed;
+});
+
+function openVocabModal() {
+  document.getElementById('vocabSearch').value = '';
+  document.getElementById('vocabLevelFilter').value = '';
+  document.getElementById('vocabStatusFilter').value = '';
+  renderVocabList();
+  document.getElementById('vocabModal').style.display = 'block';
+}
+
+function closeVocabModal() {
+  document.getElementById('vocabModal').style.display = 'none';
+}
+
+// 點 modal 背景關閉
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('vocabModal').addEventListener('click', function(e) {
+    if (e.target === this) closeVocabModal();
+  });
+});
+
+function renderVocabList() {
+  const search  = document.getElementById('vocabSearch').value.trim().toLowerCase();
+  const levelF  = document.getElementById('vocabLevelFilter').value;
+  const statusF = document.getElementById('vocabStatusFilter').value;
+  const counts  = state.correctCounts;
+
+  const filtered = WORD_DATA_FULL.filter(item => {
+    if (search && !item.word.toLowerCase().includes(search) &&
+        !item.translation.toLowerCase().includes(search)) return false;
+    if (levelF && item.level !== levelF) return false;
+    const c = counts[item.word] || 0;
+    if (statusF === 'mastered' && c < MASTERED) return false;
+    if (statusF === 'learning' && (c === 0 || c >= MASTERED)) return false;
+    if (statusF === 'new' && c > 0) return false;
+    return true;
+  });
+
+  const levelColor = { '初級': 'var(--purple)', '中級': 'var(--blue)', '高級': 'var(--green)' };
+  const body = document.getElementById('vocabListBody');
+  body.innerHTML = '';
+
+  filtered.forEach((item, idx) => {
+    const c = counts[item.word] || 0;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;';
+
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+    row.addEventListener('click', () => toggleVocabDetail(idx));
+
+    const lvSpan = document.createElement('span');
+    lvSpan.style.cssText = 'font-size:10px;font-weight:700;min-width:24px;color:' + (levelColor[item.level] || 'var(--muted)') + ';';
+    lvSpan.textContent = item.level;
+    row.appendChild(lvSpan);
+
+    const wordSpan = document.createElement('span');
+    wordSpan.style.cssText = 'font-weight:600;font-size:14px;flex:1;color:var(--text);';
+    wordSpan.textContent = item.word;
+    row.appendChild(wordSpan);
+
+    const dotsDiv = document.createElement('div');
+    dotsDiv.style.cssText = 'display:flex;gap:3px;align-items:center;';
+    for (let i = 0; i < MASTERED; i++) {
+      const dot = document.createElement('span');
+      dot.style.cssText = 'width:7px;height:7px;border-radius:50%;display:inline-block;background:' + (i < c ? 'var(--green)' : 'var(--surface2)') + ';';
+      dotsDiv.appendChild(dot);
+    }
+    row.appendChild(dotsDiv);
+
+    if (c >= MASTERED) {
+      const tag = document.createElement('span');
+      tag.style.cssText = 'font-size:10px;background:var(--green-dim);color:var(--green);padding:1px 6px;border-radius:10px;font-weight:700;white-space:nowrap;';
+      tag.textContent = '精熟';
+      row.appendChild(tag);
+    } else if (c > 0) {
+      const tag = document.createElement('span');
+      tag.style.cssText = 'font-size:10px;background:var(--blue-dim);color:var(--blue);padding:1px 6px;border-radius:10px;white-space:nowrap;';
+      tag.textContent = '學習中';
+      row.appendChild(tag);
+    }
+
+    const arrow = document.createElement('span');
+    arrow.id = 'vocab-arrow-' + idx;
+    arrow.style.cssText = 'color:var(--muted);font-size:12px;';
+    arrow.textContent = '▼';
+    row.appendChild(arrow);
+    wrapper.appendChild(row);
+
+    const detail = document.createElement('div');
+    detail.id = 'vocab-detail-' + idx;
+    detail.style.cssText = 'display:none;padding:0 12px 12px;border-top:1px solid var(--border);';
+
+    const transDiv = document.createElement('div');
+    transDiv.style.cssText = 'font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6;';
+    transDiv.textContent = item.translation;
+    detail.appendChild(transDiv);
+
+    const rawS   = (item.sentence || '').trim().replace(/^\d+\.\s*/, '');
+    const firstS = rawS.split(/\d+\./)[0].trim();
+    const rawT   = (item.trans_s  || '').trim().replace(/^\d+\.\s*/, '');
+    const firstT = rawT.split(/\d+\./)[0].trim();
+
+    if (firstS) {
+      const sDiv = document.createElement('div');
+      sDiv.style.cssText = 'font-size:13px;margin-top:8px;font-style:italic;color:var(--text);';
+      sDiv.textContent = firstS;
+      detail.appendChild(sDiv);
+    }
+    if (firstT) {
+      const tDiv = document.createElement('div');
+      tDiv.style.cssText = 'font-size:12px;color:var(--muted);margin-top:2px;';
+      tDiv.textContent = firstT;
+      detail.appendChild(tDiv);
+    }
+
+    wrapper.appendChild(detail);
+    body.appendChild(wrapper);
+  });
+
+  document.getElementById('vocabListCount').textContent = '共 ' + filtered.length + ' 個單字';
+}
+
+function toggleVocabDetail(idx) {
+  const detail = document.getElementById(`vocab-detail-${idx}`);
+  const arrow  = document.getElementById(`vocab-arrow-${idx}`);
+  const open   = detail.style.display === 'none';
+  detail.style.display = open ? 'block' : 'none';
+  arrow.textContent    = open ? '▲' : '▼';
 }
 
 // ── 初始化 ───────────────────────────────────────────
