@@ -29,6 +29,6 @@ COPY . .
 # 收集靜態檔案（Django）
 RUN python manage.py collectstatic --noinput || true
 
-EXPOSE 8000
+EXPOSE $PORT
 
-CMD gunicorn toeic.wsgi --bind 0.0.0.0:$PORT
+CMD gunicorn toeic.wsgi --bind 0.0.0.0:${PORT:-8000}
