@@ -438,7 +438,7 @@ const LS_KEY   = 'toeic_progress_v2';
 const MASTERED = 3;
 const STATS       = {{ stats|safe }};
 const LEVEL_WORDS = {{ level_words|safe }};
-const HISTORY_LEN = 25; // 記住最近幾題（精熟題需間隔 20 題）
+const HISTORY_LEN = 110; // 遺忘曲線：最長間隔100題，多存一些緩衝
 
 let state = {
   level:         '中級',
@@ -665,12 +665,12 @@ function checkAns() {
   if (isCorrect) {
     const hint = (q.word !== answerDisplay) ? `（${q.word}）` : '';
     title.textContent = `✅ 正確！  ${answerDisplay}${hint}　${q.translation}`;
-    const prev = state.correctCounts[q.word] || 0;
-    if (prev < MASTERED) state.correctCounts[q.word] = prev + 1;
+    state.correctCounts[q.word] = (state.correctCounts[q.word] || 0) + 1;
     state.streak++;
   } else {
     const hint = (q.word !== answerDisplay) ? `（${q.word}）` : '';
     title.textContent = `❌ 正確答案：${answerDisplay}${hint}　${q.translation}`;
+    state.correctCounts[q.word] = 0;  // 答錯重置，下次當新題複習
     state.streak = 0;
   }
 
