@@ -13,7 +13,7 @@ CSV_PATH = os.path.join(BASE_DIR, 'vocabulary.csv')
 LEVEL_ORDER        = ["初級", "中級", "高級"]
 MASTERED_THRESHOLD = 3
 NORMAL_GAP         = 10   # 一般題目至少間隔幾題
-MASTERED_GAP       = 15   # 精熟題至少間隔幾題
+MASTERED_GAP       = 20   # 精熟題至少間隔幾題
 
 # ── 載入 NLP 工具 ────────────────────────────────────────────────
 try:
@@ -27,7 +27,7 @@ except Exception as e:
 
 # ── 載入單字表 ───────────────────────────────────────────────────
 try:
-    _df       = pd.read_csv(CSV_PATH, encoding='utf-8-sig')
+    _df       = pd.read_csv(CSV_PATH)
     WORD_POOL = _df.to_dict('records')
 except Exception as e:
     print(f"[WARNING] Cannot load vocabulary.csv: {e}")
@@ -36,7 +36,7 @@ except Exception as e:
 LEVEL_WORDS  = {lv: [w['word'] for w in WORD_POOL if str(w['toeic_target']) == lv]
                 for lv in LEVEL_ORDER}
 LEVEL_COUNTS = {lv: len(LEVEL_WORDS[lv]) for lv in LEVEL_ORDER}
-VERB_POOL    = [w for w in WORD_POOL if 'v.' in str(w.get('translation', ''))]
+VERB_POOL    = [w for w in WORD_POOL if re.search(r'\bv\.', str(w.get('translation', '')))]
 
 _INFLECT_TAG = {'VBD', 'VBZ', 'VBP', 'VBG', 'VBN', 'VB'}
 
@@ -207,7 +207,7 @@ def _get_question(difficulty, history, correct_counts):
             display_s = raw_s.strip()
             display_t = raw_t.strip()
 
-        is_verb = 'v.' in str(target.get('translation', ''))
+        is_verb = bool(re.search(r'\bv\.', str(target.get('translation', ''))))
         final_sentence, matched_tag = _find_and_blank(display_s, target['word'], is_verb)
 
         # 如果挖空成功（句子含底線）就使用，否則換一題
