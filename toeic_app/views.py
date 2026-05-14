@@ -13,7 +13,7 @@ CSV_PATH = os.path.join(BASE_DIR, 'vocabulary.csv')
 LEVEL_ORDER        = ["初級", "中級", "高級"]
 MASTERED_THRESHOLD = 3
 NORMAL_GAP         = 10   # 一般題目至少間隔幾題
-MASTERED_GAP       = 15   # 精熟題至少間隔幾題
+MASTERED_GAP       = 20   # 精熟題至少間隔幾題
 
 # ── 載入 NLP 工具 ────────────────────────────────────────────────
 try:
