@@ -12,8 +12,15 @@ CSV_PATH = os.path.join(BASE_DIR, 'vocabulary.csv')
 
 LEVEL_ORDER        = ["初級", "中級", "高級"]
 MASTERED_THRESHOLD = 3
-NORMAL_GAP         = 10   # 一般題目至少間隔幾題
-MASTERED_GAP       = 20   # 精熟題至少間隔幾題
+
+# 遺忘曲線間隔表：答對 N 次後，至少要間隔幾題才能再出現
+# 答對0次 = 新題，優先出現（gap=0）
+# 答對3次以上固定100題
+GAP_BY_COUNT = [0, 5, 15, 100]  # index = 答對次數（3以上都用最後一個）
+
+def _get_gap(correct_count):
+    idx = min(correct_count, len(GAP_BY_COUNT) - 1)
+    return GAP_BY_COUNT[idx]
 
 # ── 載入 NLP 工具 ────────────────────────────────────────────────
 try:
@@ -153,14 +160,13 @@ def _find_and_blank(sentence, target_word, is_verb):
 def _get_question(difficulty, history, correct_counts):
     """
     history: list，最近出現過的單字（index 0 = 最新），用來計算間隔
+    correct_counts: {word: int}，答對次數
     """
     max_idx  = LEVEL_ORDER.index(difficulty) if difficulty in LEVEL_ORDER else 2
     eligible = [w for w in WORD_POOL
                 if str(w['toeic_target']) in LEVEL_ORDER[:max_idx + 1]]
     if not eligible:
         return None
-
-    mastered = {w for w, c in correct_counts.items() if c >= MASTERED_THRESHOLD}
 
     # 計算每個單字距上次出現的題數（1 = 上一題）
     last_pos: dict = {}
@@ -172,25 +178,28 @@ def _get_question(difficulty, history, correct_counts):
         pos = last_pos.get(word)
         if pos is None:
             return True
-        gap = MASTERED_GAP if word in mastered else NORMAL_GAP
+        gap = _get_gap(correct_counts.get(word, 0))
         return pos >= gap
 
     new_ones = [w for w in eligible if w['word'] not in correct_counts and _ok(w['word'])]
-    old_ones = [w for w in eligible if w['word'] in correct_counts
-                and w['word'] not in mastered and _ok(w['word'])]
+    old_ones = [w for w in eligible if w['word'] in correct_counts and _ok(w['word'])]
     all_pool = new_ones + old_ones
 
-    # 全部冷卻中：放寬限制，取間隔最久的
+    # 全部冷卻中（包含全部精熟的情況）：取距上次出現最久的來出題
     if not all_pool:
-        candidates = [w for w in eligible if w['word'] not in mastered] or eligible
-        candidates.sort(key=lambda w: last_pos.get(w['word'], 999), reverse=True)
+        candidates = sorted(eligible, key=lambda w: last_pos.get(w['word'], 9999), reverse=True)
         all_pool = candidates[:max(1, len(candidates) // 3)]
+
+    # 優先複習答對1~2次的（尚未穩固的單字）
+    review_ones = [w for w in old_ones if 0 < correct_counts.get(w['word'], 0) < MASTERED_THRESHOLD]
+    if review_ones and random.random() > 0.6:
+        target_raw = random.choice(review_ones)
+    else:
+        target_raw = random.choice(all_pool)
 
     # 最多嘗試 5 次，避免挖空失敗的題目出現
     for _attempt in range(5):
-        if old_ones and random.random() > 0.7:
-            target_raw = random.choice(old_ones)
-        else:
+        if _attempt > 0:
             target_raw = random.choice(all_pool)
 
         target = target_raw.copy()
