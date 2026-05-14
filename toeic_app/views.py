@@ -16,7 +16,7 @@ MASTERED_THRESHOLD = 3
 # 遺忘曲線間隔表：答對 N 次後，至少要間隔幾題才能再出現
 # 答對0次 = 新題，優先出現（gap=0）
 # 答對3次以上固定100題
-GAP_BY_COUNT = [0, 5, 15, 100]  # index = 答對次數（3以上都用最後一個）
+GAP_BY_COUNT = [0, 5, 15, 40]  # index = 答對次數（3以上都用最後一個）
 
 def _get_gap(correct_count):
     idx = min(correct_count, len(GAP_BY_COUNT) - 1)
