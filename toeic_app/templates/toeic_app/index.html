@@ -416,7 +416,7 @@
       <div class="opt-analysis" id="optAnalysis"></div>
     </div>
     <div class="result-divider"></div>
-    <div class="result-section-label">📖 句子翻譯</div>
+    <div class="result-section-label" id="transLabel">📖 句子翻譯</div>
     <div class="trans-text" id="transText"></div>
   </div>
 
@@ -780,15 +780,13 @@ function checkAns() {
   }
 
   // 句子翻譯區
-  if (mode === 'zh2en') {
-    // 例句把正確答案加粗，並顯示中文翻譯
-    const boldSentence = q.sentence.replace('______', `<strong>${answerDisplay}</strong>`);
-    document.getElementById('transText').innerHTML = `${boldSentence}<br><span style="color:#8a7d6a;font-size:13px;">${q.trans_s}</span>`;
-  } else if (mode === 'en2zh') {
-    // 英翻中：顯示例句加粗答案和中文翻譯
+  const transLabel = document.getElementById('transLabel');
+  if (mode === 'zh2en' || mode === 'en2zh' || mode === 'listen') {
+    transLabel.textContent = '📖 例句';
     const boldSentence = q.sentence.replace('______', `<strong>${answerDisplay}</strong>`);
     document.getElementById('transText').innerHTML = `${boldSentence}<br><span style="color:#8a7d6a;font-size:13px;">${q.trans_s}</span>`;
   } else {
+    transLabel.textContent = '📖 句子翻譯';
     document.getElementById('transText').textContent = q.trans_s;
   }
 
