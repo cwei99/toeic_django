@@ -769,7 +769,7 @@ function checkAns() {
         ? `<span style="color:#888;font-size:13px;">（${o.base_word}）</span>　`
         : '';
       const label = mode === 'en2zh'
-        ? `${o.trans}`
+        ? `${o.word}　${baseHint}${o.trans}`
         : `${o.word}　${baseHint}${o.trans}`;
       return `<div class="opt-row ${o.word === answerDisplay ? 'is-correct' : ''}">
         ${o.word === answerDisplay ? '✅' : '⚪'} ${label}
