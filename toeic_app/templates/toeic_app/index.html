@@ -664,6 +664,16 @@ function renderSentence(sentence) {
   el.innerHTML = sentence.replace(/\s*______\s*/g, ' <span class="blank"></span> ');
 }
 
+// 把 "n. 礦；礦山 v. 採礦" 拆成多行 HTML
+function formatTrans(trans) {
+  if (!trans) return '';
+  const parts = trans.trim().split(/(?=(?:n|v|adj|adv|prep|conj|pron|int|abbr)\.\s)/);
+  if (parts.length <= 1) return `<span>${trans}</span>`;
+  return parts.map((p, i) =>
+    `<span style="${i > 0 ? 'display:block;' : ''}">${p.trim()}</span>`
+  ).join('');
+}
+
 function buildOptions(q) {
   const area = document.getElementById('optionsArea');
   area.innerHTML = '';
@@ -687,7 +697,7 @@ function buildOptionsZh(q) {
     const btn = document.createElement('button');
     btn.className = 'option-btn';
     btn.dataset.word = q.options[i].word;  // 還是用英文word當key
-    btn.innerHTML = `<span class="opt-label">${lbl}</span><span class="opt-word" style="font-size:13px;">${q.options[i].trans}</span>`;
+    btn.innerHTML = `<span class="opt-label">${lbl}</span><span class="opt-word" style="font-size:13px;line-height:1.7;">${formatTrans(q.options[i].trans)}</span>`;
     btn.onclick = () => selectOption(q.options[i].word);
     area.appendChild(btn);
   });
@@ -772,8 +782,8 @@ function checkAns() {
         ? `<span style="color:#888;font-size:13px;">（${o.base_word}）</span>　`
         : '';
       const label = mode === 'en2zh'
-        ? `${o.word}　${baseHint}${o.trans}`
-        : `${o.word}　${baseHint}${o.trans}`;
+        ? `${o.word}　${baseHint}<span style="line-height:1.7;">${formatTrans(o.trans)}</span>`
+        : `${o.word}　${baseHint}<span style="line-height:1.7;">${formatTrans(o.trans)}</span>`;
       return `<div class="opt-row ${o.word === answerDisplay ? 'is-correct' : ''}">
         ${o.word === answerDisplay ? '✅' : '⚪'} ${label}
       </div>`;
