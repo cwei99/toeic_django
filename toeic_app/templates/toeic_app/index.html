@@ -83,6 +83,13 @@
   }
   .vocab-list-btn:hover { background: var(--blue); color: #fff; }
 
+  .sidebar-toggle {
+    background: none; border: none;
+    cursor: pointer; color: var(--text);
+    padding: 2px 4px; line-height: 1;
+    display: flex; align-items: center;
+  }
+
   .progress-rows { display: flex; flex-direction: column; gap: 6px; }
   .progress-row  { display: flex; align-items: center; gap: 8px; }
   .prog-label    { font-size: 11px; font-weight: 700; width: 28px; }
@@ -126,6 +133,7 @@
   .seg-btn.active-purple { border-color: var(--purple); background: var(--purple-dim); color: var(--purple); }
   .seg-btn.active-green  { border-color: var(--green);  background: var(--green-dim);  color: var(--green); }
   .seg-btn.active-orange { border-color: var(--orange); background: var(--orange-dim); color: var(--orange); }
+  .seg-btn.active-teal   { border-color: #0e9f8e; background: #d0f5f0; color: #0e9f8e; }
 
   .divider { height: 1px; background: var(--border); margin: 11px 0; }
 
@@ -313,6 +321,13 @@
   <!-- Header -->
   <div class="header">
     <div class="header-top">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="設定">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="19" y2="6"/>
+          <line x1="3" y1="11" x2="19" y2="11"/>
+          <line x1="3" y1="16" x2="19" y2="16"/>
+        </svg>
+      </button>
       <span class="app-title">TOEIC Vocab</span>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="vocab-list-btn" onclick="openVocabModal()">📖 單字表</button>
@@ -338,20 +353,29 @@
     </div>
   </div>
 
-  <!-- 設定卡片 -->
-  <div class="card">
+  <!-- 側邊欄遮罩 -->
+  <div id="sidebarOverlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:200;"></div>
+
+  <!-- 側邊欄 -->
+  <div id="sidebar" style="position:fixed;top:0;left:-280px;width:260px;height:100%;background:var(--surface);z-index:201;transition:left .25s ease;padding:24px 20px;box-shadow:4px 0 20px rgba(0,0,0,0.12);overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <span style="font-size:15px;font-weight:700;color:var(--text);">⚙️ 設定</span>
+      <button onclick="closeSidebar()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
     <div class="card-label">難度目標</div>
-    <div class="btn-group" id="levelBtns">
+    <div class="btn-group" id="levelBtns" style="margin-bottom:16px;">
       <button class="seg-btn" data-level="初級" onclick="setLevel('初級')">初級</button>
       <button class="seg-btn active-blue" data-level="中級" onclick="setLevel('中級')">中級</button>
       <button class="seg-btn" data-level="高級" onclick="setLevel('高級')">高級</button>
     </div>
     <div class="divider"></div>
     <div class="card-label">題目模式</div>
-    <div class="btn-group" id="modeBtns">
+    <div class="btn-group" id="modeBtns" style="margin-bottom:16px;flex-wrap:wrap;">
       <button class="seg-btn active-blue" data-mode="choice" onclick="setMode('choice')">選擇題</button>
       <button class="seg-btn" data-mode="fill" onclick="setMode('fill')">填充題</button>
       <button class="seg-btn" data-mode="listen" onclick="setMode('listen')">🎧 聽力</button>
+      <button class="seg-btn" data-mode="zh2en" onclick="setMode('zh2en')">中→英</button>
+      <button class="seg-btn" data-mode="en2zh" onclick="setMode('en2zh')">英→中</button>
     </div>
     <div class="divider"></div>
     <div class="reset-row">
@@ -387,8 +411,10 @@
   <div class="result-card" id="resultCard">
     <div class="result-title" id="resultTitle"></div>
     <div class="tts-area" id="resultTtsArea"></div>
-    <div class="result-section-label">選項解析</div>
-    <div class="opt-analysis" id="optAnalysis"></div>
+    <div id="optAnalysisSection">
+      <div class="result-section-label">選項解析</div>
+      <div class="opt-analysis" id="optAnalysis"></div>
+    </div>
     <div class="result-divider"></div>
     <div class="result-section-label">📖 句子翻譯</div>
     <div class="trans-text" id="transText"></div>
@@ -506,9 +532,9 @@ function setLevel(lv) {
 }
 function setMode(m) {
   state.mode = m;
-  const map = { 'choice':'active-blue', 'fill':'active-blue', 'listen':'active-orange' };
+  const map = { 'choice':'active-blue', 'fill':'active-purple', 'listen':'active-orange', 'zh2en':'active-green', 'en2zh':'active-teal' };
   document.querySelectorAll('#modeBtns .seg-btn').forEach(b => {
-    b.className = 'seg-btn' + (b.dataset.mode === m ? ' ' + map[m] : '');
+    b.className = 'seg-btn' + (b.dataset.mode === m ? ' ' + (map[m] || 'active-blue') : '');
   });
   if (state.currentQ) nextQuiz();
 }
@@ -579,7 +605,38 @@ async function nextQuiz() {
     renderSentence(q.sentence);
     buildOptions(q);
 
+  } else if (mode === 'zh2en') {
+    document.getElementById('quizInstruction').textContent = '看中文，填入對應的英文單字';
+    // 把翻譯按詞性分行顯示：「v. 使彎曲 n. 灣；曲」→ 每個詞性換行
+    const formatted = q.translation
+      .trim()
+      .replace(/\s+(n\.|v\.|adj\.|adv\.|prep\.|conj\.|pron\.|phr\.|abbr\.)/g, '\n$1')
+      .trim();
+    document.getElementById('quizSentence').style.whiteSpace = 'pre-line';
+    document.getElementById('quizSentence').textContent = formatted;
+    const ta = document.getElementById('ttsArea');
+    ta.appendChild(makeTtsBtn('聽發音', q.word));
+    ta.style.display = 'flex';
+    const w = q.word.split('/')[0];
+    document.getElementById('hintText').textContent =
+      w.length > 2 ? `提示：${w[0]} ${'_ '.repeat(w.length-2)}${w[w.length-1]}` : `提示：${w[0]}…`;
+    document.getElementById('fillInput').value = '';
+    document.getElementById('fillArea').style.display = 'flex';
+    setTimeout(() => document.getElementById('fillInput').focus(), 100);
+
+  } else if (mode === 'en2zh') {
+    document.getElementById('quizInstruction').textContent = '看英文，選出正確的中文意思';
+    const el = document.getElementById('quizSentence');
+    el.style.whiteSpace = '';
+    el.textContent = q.word;
+    // 選項改成中文翻譯
+    buildOptionsZh(q);
+    const ta = document.getElementById('ttsArea');
+    ta.appendChild(makeTtsBtn('聽發音', q.word));
+    ta.style.display = 'flex';
+
   } else {
+    // fill 模式
     document.getElementById('quizInstruction').textContent = '填入正確的單字';
     renderSentence(q.sentence);
     const ta = document.getElementById('ttsArea');
@@ -599,8 +656,9 @@ async function nextQuiz() {
 }
 
 function renderSentence(sentence) {
-  document.getElementById('quizSentence').innerHTML =
-    sentence.replace(/\s*______\s*/g, ' <span class="blank"></span> ');
+  const el = document.getElementById('quizSentence');
+  el.style.whiteSpace = '';
+  el.innerHTML = sentence.replace(/\s*______\s*/g, ' <span class="blank"></span> ');
 }
 
 function buildOptions(q) {
@@ -612,6 +670,21 @@ function buildOptions(q) {
     btn.className = 'option-btn';
     btn.dataset.word = q.options[i].word;
     btn.innerHTML = `<span class="opt-label">${lbl}</span><span class="opt-word">${q.options[i].word}</span>`;
+    btn.onclick = () => selectOption(q.options[i].word);
+    area.appendChild(btn);
+  });
+}
+
+function buildOptionsZh(q) {
+  // 英翻中：選項顯示中文翻譯，答對比對原形
+  const area = document.getElementById('optionsArea');
+  area.innerHTML = '';
+  ['A','B','C','D'].forEach((lbl, i) => {
+    if (!q.options[i]) return;
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.dataset.word = q.options[i].word;  // 還是用英文word當key
+    btn.innerHTML = `<span class="opt-label">${lbl}</span><span class="opt-word" style="font-size:13px;">${q.options[i].trans}</span>`;
     btn.onclick = () => selectOption(q.options[i].word);
     area.appendChild(btn);
   });
@@ -639,17 +712,26 @@ function updateDotRow(word) {
 function checkAns() {
   const q = state.currentQ;
   if (!q) return;
-  const userVal = (state.mode === 'fill'
+
+  const mode = state.mode;
+  const userVal = (['fill', 'zh2en'].includes(mode)
     ? document.getElementById('fillInput').value.trim()
     : state.selectedWord || '').trim();
   if (!userVal) return;
 
-  // 正確答案：優先用 answer_display（時態變化後），fallback 原形
   const answerDisplay = q.answer_display || q.word;
-  const correctList = [answerDisplay.toLowerCase()];
-  // 也接受原形（填充題容錯）
-  q.word.split('/').forEach(w => correctList.push(w.trim().toLowerCase()));
-  const isCorrect = correctList.includes(userVal.toLowerCase());
+
+  let isCorrect;
+  if (mode === 'zh2en') {
+    // 中翻英：接受所有 / 分隔的原形
+    const correctList = q.word.split('/').map(w => w.trim().toLowerCase());
+    isCorrect = correctList.includes(userVal.toLowerCase());
+  } else {
+    // 其他模式：比對 answer_display 或原形
+    const correctList = [answerDisplay.toLowerCase()];
+    q.word.split('/').forEach(w => correctList.push(w.trim().toLowerCase()));
+    isCorrect = correctList.includes(userVal.toLowerCase());
+  }
 
   document.querySelectorAll('.option-btn').forEach(b => {
     if (b.dataset.word === answerDisplay)              b.classList.add('correct');
@@ -678,15 +760,37 @@ function checkAns() {
   rtts.innerHTML = '';
   rtts.appendChild(makeTtsBtn('再聽一次', q.word.split('/')[0], 'muted'));
 
-  document.getElementById('optAnalysis').innerHTML = q.options.map(o => {
-    const baseHint = (o.base_word && o.base_word !== o.word)
-      ? `<span style="color:#888;font-size:13px;">（${o.base_word}）</span>　`
-      : '';
-    return `<div class="opt-row ${o.word === answerDisplay ? 'is-correct' : ''}">
-      ${o.word === answerDisplay ? '✅' : '⚪'} ${o.word}　${baseHint}${o.trans}
-    </div>`;
-  }).join('');
-  document.getElementById('transText').textContent = q.trans_s;
+  // 選項解析只在選擇題和英翻中模式顯示
+  const optSection = document.getElementById('optAnalysisSection');
+  if (mode === 'choice' || mode === 'en2zh') {
+    optSection.style.display = 'block';
+    document.getElementById('optAnalysis').innerHTML = q.options.map(o => {
+      const baseHint = (o.base_word && o.base_word !== o.word)
+        ? `<span style="color:#888;font-size:13px;">（${o.base_word}）</span>　`
+        : '';
+      const label = mode === 'en2zh'
+        ? `${o.trans}`
+        : `${o.word}　${baseHint}${o.trans}`;
+      return `<div class="opt-row ${o.word === answerDisplay ? 'is-correct' : ''}">
+        ${o.word === answerDisplay ? '✅' : '⚪'} ${label}
+      </div>`;
+    }).join('');
+  } else {
+    optSection.style.display = 'none';
+  }
+
+  // 句子翻譯區
+  if (mode === 'zh2en') {
+    // 例句把正確答案加粗，並顯示中文翻譯
+    const boldSentence = q.sentence.replace('______', `<strong>${answerDisplay}</strong>`);
+    document.getElementById('transText').innerHTML = `${boldSentence}<br><span style="color:#8a7d6a;font-size:13px;">${q.trans_s}</span>`;
+  } else if (mode === 'en2zh') {
+    // 英翻中：顯示例句加粗答案和中文翻譯
+    const boldSentence = q.sentence.replace('______', `<strong>${answerDisplay}</strong>`);
+    document.getElementById('transText').innerHTML = `${boldSentence}<br><span style="color:#8a7d6a;font-size:13px;">${q.trans_s}</span>`;
+  } else {
+    document.getElementById('transText').textContent = q.trans_s;
+  }
 
   if (state.mode === 'choice') {
     const ta = document.getElementById('ttsArea');
@@ -713,6 +817,19 @@ function showBtn(which) {
   document.getElementById('btnCheck').classList.add('hidden');
   document.getElementById('btnNext').classList.add('hidden');
   document.getElementById('btn' + which.charAt(0).toUpperCase() + which.slice(1)).classList.remove('hidden');
+}
+
+// ── 側邊欄 ────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const isOpen = sb.style.left === '0px';
+  sb.style.left = isOpen ? '-280px' : '0px';
+  ov.style.display = isOpen ? 'none' : 'block';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').style.left = '-280px';
+  document.getElementById('sidebarOverlay').style.display = 'none';
 }
 
 // ── 單字表 ────────────────────────────────────────────
