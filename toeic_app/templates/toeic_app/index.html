@@ -567,14 +567,17 @@ async function nextQuiz() {
   document.getElementById('quizSentence').textContent = '載入中…';
   document.getElementById('dotRow').innerHTML = '';
 
-  const params = new URLSearchParams({
-    difficulty: state.level,
-    history:    JSON.stringify(state.history),
-    counts:     JSON.stringify(state.correctCounts),
-  });
   let q;
   try {
-    const res = await fetch(`/api/question/?${params}`);
+    const res = await fetch('/api/question/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        difficulty: state.level,
+        history:    state.history,
+        counts:     state.correctCounts,
+      }),
+    });
     q = await res.json();
   } catch(e) {
     document.getElementById('quizSentence').textContent = '⚠️ 載入失敗，請重試';
