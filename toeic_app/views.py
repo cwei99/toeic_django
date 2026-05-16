@@ -13,26 +13,89 @@ CSV_PATH = os.path.join(BASE_DIR, 'vocabulary.csv')
 LEVEL_ORDER        = ["初級", "中級", "高級"]
 MASTERED_THRESHOLD = 3
 
-# 遺忘曲線間隔表：答對 N 次後，至少要間隔幾題才能再出現
-# 答對0次 = 新題，優先出現（gap=0）
-# 答對3次以上固定100題
-GAP_BY_COUNT = [0, 5, 15, 40]  # index = 答對次數（3以上都用最後一個）
+# 遺忘曲線間隔表
+GAP_BY_COUNT = [0, 5, 15, 100]
 
 def _get_gap(correct_count):
     idx = min(correct_count, len(GAP_BY_COUNT) - 1)
     return GAP_BY_COUNT[idx]
 
-# ── 載入 NLP 工具 ────────────────────────────────────────────────
-try:
-    import spacy
-    from lemminflect import getInflection, getLemma
-    _nlp = spacy.load("en_core_web_sm")
-    NLP_READY = True
-except Exception as e:
-    print(f"[WARNING] NLP not available: {e}")
-    NLP_READY = False
+# ── 不規則動詞：surface → (base, tag) ────────────────────────────
+_IRREGULAR_VERBS: dict = {
+    'stuck':    ('stick', 'VBD'), 'sticks':   ('stick', 'VBZ'), 'sticking': ('stick', 'VBG'),
+    'led':      ('lead',  'VBD'), 'leads':    ('lead',  'VBZ'), 'leading':  ('lead',  'VBG'),
+    'rose':     ('rise',  'VBD'), 'risen':    ('rise',  'VBN'), 'rises':    ('rise',  'VBZ'), 'rising':   ('rise',  'VBG'),
+    'arose':    ('arise', 'VBD'), 'arisen':   ('arise', 'VBN'), 'arises':   ('arise', 'VBZ'), 'arising':  ('arise', 'VBG'),
+}
 
-# ── 載入單字表 ───────────────────────────────────────────────────
+# 不規則動詞：(base, tag) → surface（用於 _inflect_word）
+_IRREGULAR_VERBS_FORWARD: dict = {
+    ('stick', 'VBD'): 'stuck',  ('stick', 'VBZ'): 'sticks',  ('stick', 'VBG'): 'sticking',
+    ('lead',  'VBD'): 'led',    ('lead',  'VBZ'): 'leads',   ('lead',  'VBG'): 'leading',
+    ('rise',  'VBD'): 'rose',   ('rise',  'VBN'): 'risen',   ('rise',  'VBZ'): 'rises',   ('rise',  'VBG'): 'rising',
+    ('arise', 'VBD'): 'arose',  ('arise', 'VBN'): 'arisen',  ('arise', 'VBZ'): 'arises',  ('arise', 'VBG'): 'arising',
+}
+
+
+def _build_regular_forms(base: str) -> dict:
+    """規則動詞變化：回傳 {tag: form}"""
+    forms = {}
+    # VBZ
+    if re.search(r'(?:s|sh|ch|x|z)$', base):
+        forms['VBZ'] = base + 'es'
+    elif re.search(r'[^aeiou]y$', base):
+        forms['VBZ'] = base[:-1] + 'ies'
+    else:
+        forms['VBZ'] = base + 's'
+    # VBD / VBN
+    if base.endswith('e'):
+        past = base + 'd'
+    elif re.search(r'[^aeiou]y$', base):
+        past = base[:-1] + 'ied'
+    elif re.search(r'^.+[^aeiou][aeiou][^aeiouywx]$', base):
+        past = base + base[-1] + 'ed'
+    else:
+        past = base + 'ed'
+    forms['VBD'] = past
+    forms['VBN'] = past
+    # VBG
+    if base.endswith('ie'):
+        forms['VBG'] = base[:-2] + 'ying'
+    elif base.endswith('e') and not base.endswith('ee'):
+        forms['VBG'] = base[:-1] + 'ing'
+    elif re.search(r'^.+[^aeiou][aeiou][^aeiouywx]$', base):
+        forms['VBG'] = base + base[-1] + 'ing'
+    else:
+        forms['VBG'] = base + 'ing'
+    return forms
+
+
+def _inflect_word(word: str, tag) -> str:
+    if not tag:
+        return re.sub(r'\(.*?\)', '', word.split('/')[0]).strip()
+    base = re.sub(r'\(.*?\)', '', word.split('/')[0]).strip().lower()
+    if tag in ('VB', 'VBP'):
+        return base
+    if (base, tag) in _IRREGULAR_VERBS_FORWARD:
+        return _IRREGULAR_VERBS_FORWARD[(base, tag)]
+    return _build_regular_forms(base).get(tag, base)
+
+
+# ── 不規則名詞複數 ────────────────────────────────────────────────
+_IRREGULAR_NOUNS = {
+    'shelves': 'shelf', 'knives': 'knife', 'leaves': 'leaf',
+    'loaves': 'loaf', 'wolves': 'wolf', 'halves': 'half',
+    'scarves': 'scarf', 'lives': 'life', 'wives': 'wife',
+    'thieves': 'thief', 'feet': 'foot', 'teeth': 'tooth',
+    'men': 'man', 'women': 'woman', 'children': 'child',
+    'mice': 'mouse', 'geese': 'goose', 'oxen': 'ox',
+    'people': 'person', 'criteria': 'criterion', 'phenomena': 'phenomenon',
+    'data': 'datum', 'media': 'medium', 'analyses': 'analysis',
+    'bases': 'basis', 'crises': 'crisis', 'theses': 'thesis',
+}
+_NOUN_PLURAL = {v: k for k, v in _IRREGULAR_NOUNS.items()}
+
+# ── 載入單字表 ────────────────────────────────────────────────────
 try:
     _df       = pd.read_csv(CSV_PATH)
     WORD_POOL = _df.to_dict('records')
@@ -45,47 +108,24 @@ LEVEL_WORDS  = {lv: [w['word'] for w in WORD_POOL if str(w['toeic_target']) == l
 LEVEL_COUNTS = {lv: len(LEVEL_WORDS[lv]) for lv in LEVEL_ORDER}
 VERB_POOL    = [w for w in WORD_POOL if re.search(r'\bv\.', str(w.get('translation', '')))]
 
-_INFLECT_TAG = {'VBD', 'VBZ', 'VBP', 'VBG', 'VBN', 'VB'}
-
-# ── 不規則名詞複數對照表 ──────────────────────────────────────────
-_IRREGULAR_NOUNS = {
-    'shelves': 'shelf', 'knives': 'knife', 'leaves': 'leaf',
-    'loaves': 'loaf', 'wolves': 'wolf', 'halves': 'half',
-    'scarves': 'scarf', 'lives': 'life', 'wives': 'wife',
-    'thieves': 'thief', 'feet': 'foot', 'teeth': 'tooth',
-    'men': 'man', 'women': 'woman', 'children': 'child',
-    'mice': 'mouse', 'geese': 'goose', 'oxen': 'ox',
-    'people': 'person', 'criteria': 'criterion', 'phenomena': 'phenomenon',
-    'data': 'datum', 'media': 'medium', 'analyses': 'analysis',
-    'bases': 'basis', 'crises': 'crisis', 'theses': 'thesis',
-}
-# 反查：原形 → 複數
-_NOUN_PLURAL = {v: k for k, v in _IRREGULAR_NOUNS.items()}
-
-# ── 預建「所有變化形 → (原形, tag)」對照表 ────────────────────────
+# ── 預建 surface → (base, tag) 對照表（純 Python）─────────────────
 _SURFACE_TO_BASE: dict = {}
 
-if NLP_READY:
-    for _entry in VERB_POOL:
-        for _part in _entry['word'].split('/'):
-            _base = re.sub(r'\(.*?\)', '', _part).strip().lower()
-            if not _base:
-                continue
-            for _tag in ['VB', 'VBD', 'VBZ', 'VBP', 'VBG', 'VBN']:
-                _forms = getInflection(_base, tag=_tag)
-                if _forms:
-                    for _f in _forms:
-                        _key = _f.lower()
-                        if _key not in _SURFACE_TO_BASE:
-                            _SURFACE_TO_BASE[_key] = (_base, _tag)
+for _entry in VERB_POOL:
+    for _part in _entry['word'].split('/'):
+        _base = re.sub(r'\(.*?\)', '', _part).strip().lower()
+        if not _base:
+            continue
+        # 不規則變化形
+        for _surface, (_b, _tag) in _IRREGULAR_VERBS.items():
+            if _b == _base and _surface not in _SURFACE_TO_BASE:
+                _SURFACE_TO_BASE[_surface] = (_base, _tag)
+        # 規則變化形
+        for _tag, _form in _build_regular_forms(_base).items():
+            if _form not in _SURFACE_TO_BASE:
+                _SURFACE_TO_BASE[_form] = (_base, _tag)
 
-
-def _inflect_word(word, tag):
-    if not NLP_READY or not tag:
-        return re.sub(r'\(.*?\)', '', word.split('/')[0]).strip()
-    base   = re.sub(r'\(.*?\)', '', word.split('/')[0]).strip()
-    result = getInflection(base, tag=tag)
-    return result[0] if result else base
+_INFLECT_TAG = {'VBD', 'VBZ', 'VBP', 'VBG', 'VBN', 'VB'}
 
 
 def _make_blank_pattern(w):
@@ -106,7 +146,7 @@ def _find_and_blank(sentence, target_word, is_verb):
         if base:
             base_forms.add(base)
 
-    # 先把句子裡的 word1/word2 斜線變體合併成第一個詞
+    # 斜線變體合併
     parts = [re.sub(r'\(.*?\)', '', p).strip() for p in target_word.split('/') if p.strip()]
     if len(parts) >= 2:
         for i, a in enumerate(parts):
@@ -117,25 +157,23 @@ def _find_and_blank(sentence, target_word, is_verb):
                 )
                 sentence = slash_pat.sub(a, sentence)
 
-    # 方法一：預建對照表（處理 stuck/went 等不規則動詞變化）
-    if NLP_READY and is_verb:
-        doc = _nlp(sentence)
-        for token in doc:
-            surface = token.text.lower()
+    # 方法一：預建對照表（處理不規則 / 規則動詞變化形）
+    if is_verb:
+        for m in re.finditer(r'\b\w+\b', sentence):
+            surface = m.group(0).lower()
             if surface in _SURFACE_TO_BASE:
                 orig_base, tag = _SURFACE_TO_BASE[surface]
                 if orig_base in base_forms:
-                    blanked = sentence[:token.idx] + '______' + sentence[token.idx + len(token.text):]
+                    blanked = sentence[:m.start()] + '______' + sentence[m.end():]
                     return blanked, tag
-            # 備用：spaCy lemma
-            if token.lemma_.lower() in base_forms and token.tag_ in _INFLECT_TAG:
-                blanked = sentence[:token.idx] + '______' + sentence[token.idx + len(token.text):]
-                return blanked, token.tag_
+            if surface in base_forms:
+                blanked = sentence[:m.start()] + '______' + sentence[m.end():]
+                return blanked, 'VB'
 
-    # 方法二：不規則名詞複數對照表（shelves→shelf 等）
+    # 方法二：不規則名詞複數
     if not is_verb:
         for base_f in base_forms:
-            plural = _NOUN_PLURAL.get(base_f)  # shelf → shelves
+            plural = _NOUN_PLURAL.get(base_f)
             targets = [base_f]
             if plural:
                 targets.append(plural)
@@ -144,7 +182,7 @@ def _find_and_blank(sentence, target_word, is_verb):
                 if pat.search(sentence):
                     return pat.sub('______', sentence), None
 
-    # 方法三：regex fallback（規則變化）
+    # 方法三：regex fallback
     for part in target_word.split('/'):
         base_w = re.sub(r'\(.*?\)', '', part).strip()
         if not base_w:
@@ -158,17 +196,12 @@ def _find_and_blank(sentence, target_word, is_verb):
 
 
 def _get_question(difficulty, history, correct_counts):
-    """
-    history: list，最近出現過的單字（index 0 = 最新），用來計算間隔
-    correct_counts: {word: int}，答對次數
-    """
     max_idx  = LEVEL_ORDER.index(difficulty) if difficulty in LEVEL_ORDER else 2
     eligible = [w for w in WORD_POOL
                 if str(w['toeic_target']) in LEVEL_ORDER[:max_idx + 1]]
     if not eligible:
         return None
 
-    # 計算每個單字距上次出現的題數（1 = 上一題）
     last_pos: dict = {}
     for i, w in enumerate(history):
         if w not in last_pos:
@@ -185,19 +218,16 @@ def _get_question(difficulty, history, correct_counts):
     old_ones = [w for w in eligible if w['word'] in correct_counts and _ok(w['word'])]
     all_pool = new_ones + old_ones
 
-    # 全部冷卻中（包含全部精熟的情況）：取距上次出現最久的來出題
     if not all_pool:
         candidates = sorted(eligible, key=lambda w: last_pos.get(w['word'], 9999), reverse=True)
         all_pool = candidates[:max(1, len(candidates) // 3)]
 
-    # 優先複習答對1~2次的（尚未穩固的單字）
     review_ones = [w for w in old_ones if 0 < correct_counts.get(w['word'], 0) < MASTERED_THRESHOLD]
     if review_ones and random.random() > 0.6:
         target_raw = random.choice(review_ones)
     else:
         target_raw = random.choice(all_pool)
 
-    # 最多嘗試 5 次，避免挖空失敗的題目出現
     for _attempt in range(5):
         if _attempt > 0:
             target_raw = random.choice(all_pool)
@@ -219,12 +249,8 @@ def _get_question(difficulty, history, correct_counts):
         is_verb = bool(re.search(r'\bv\.', str(target.get('translation', ''))))
         final_sentence, matched_tag = _find_and_blank(display_s, target['word'], is_verb)
 
-        # 如果挖空成功（句子含底線）就使用，否則換一題
         if '______' in final_sentence:
             break
-    else:
-        # 5 次都失敗，直接用最後一個（至少不會卡死）
-        pass
 
     if is_verb and matched_tag:
         answer_display = _inflect_word(target['word'], matched_tag)
@@ -257,7 +283,6 @@ def _get_question(difficulty, history, correct_counts):
 
 
 def index(request):
-    # 傳完整單字資料給前端（單字表用）
     word_data = [
         {
             'word':        w['word'],
