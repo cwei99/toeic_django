@@ -5,7 +5,8 @@ import json
 import pandas as pd
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV_PATH = os.path.join(BASE_DIR, 'vocabulary.csv')
@@ -300,21 +301,28 @@ def index(request):
     })
 
 
-@require_GET
+@csrf_exempt
+@require_POST
 def get_question(request):
-    difficulty  = request.GET.get('difficulty', '中級')
-    history_raw = request.GET.get('history', '[]')
-    counts_raw  = request.GET.get('counts', '{}')
     try:
-        history = json.loads(history_raw)
+        data = json.loads(request.body)
     except Exception:
-        history = []
-    try:
-        correct_counts = json.loads(counts_raw)
-    except Exception:
-        correct_counts = {}
+        data = {}
+    difficulty = data.get('difficulty', '中級')
+    history    = data.get('history', [])
+    counts     = data.get('counts', {})
+    if isinstance(history, str):
+        try:
+            history = json.loads(history)
+        except Exception:
+            history = []
+    if isinstance(counts, str):
+        try:
+            counts = json.loads(counts)
+        except Exception:
+            counts = {}
 
-    q = _get_question(difficulty, history, correct_counts)
+    q = _get_question(difficulty, history, counts)
     if not q:
         return JsonResponse({"error": "no questions"}, status=404)
     return JsonResponse(q)
